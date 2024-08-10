@@ -1,184 +1,17 @@
-from typing import TypedDict, Literal
+from typing import TypedDict
 
-from langgraph.graph import StateGraph, END
-from document_summarizer_few_shot.utils.nodes import call_model, should_continue, tool_node
-from document_summarizer_few_shot.utils.state import AgentState, DocSummarizerState
-
-
-# Define the config
-class GraphConfig(TypedDict):
-    model_name: Literal["anthropic", "openai"]
-
-
-# Define a new graph
-workflow = StateGraph(AgentState, config_schema=GraphConfig)
-
-# Define the two nodes we will cycle between
-workflow.add_node("agent", call_model)
-workflow.add_node("action", tool_node)
-
-# Set the entrypoint as `agent`
-# This means that this node is the first one called
-workflow.set_entry_point("agent")
-
-# We now add a conditional edge
-workflow.add_conditional_edges(
-    # First, we define the start node. We use `agent`.
-    # This means these are the edges taken after the `agent` node is called.
-    "agent",
-    # Next, we pass in the function that will determine which node is called next.
-    should_continue,
-    # Finally we pass in a mapping.
-    # The keys are strings, and the values are other nodes.
-    # END is a special node marking that the graph should finish.
-    # What will happen is we will call `should_continue`, and then the output of that
-    # will be matched against the keys in this mapping.
-    # Based on which one it matches, that node will then be called.
-    {
-        # If `tools`, then we call the tool node.
-        "continue": "action",
-        # Otherwise we finish.
-        "end": END,
-    },
-)
-
-# We now add a normal edge from `tools` to `agent`.
-# This means that after `tools` is called, `agent` node is called next.
-workflow.add_edge("action", "agent")
-
-# Finally, we compile it!
-# This compiles it into a LangChain Runnable,
-# meaning you can use it as you would any other runnable
-graph = workflow.compile()
-
-
-
-
-summarizer_workflow = StateGraph(DocSummarizerState, config_schema=GraphConfig)
-
-from langchain_community.document_loaders import WebBaseLoader
-from langchain_community.document_loaders.github import GithubFileLoader
-
+from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_openai import ChatOpenAI
-
-# def load_url_generic(state, config):
-#     url = state.get("url")
-#     if not url: 
-#         raise ValueError("No URL provided")
-    
-#     loader = WebBaseLoader(url)
-#     doc = loader.load()[0].page_content
-    
-
-#     return {"url": url, "raw_content": doc}
-
-def convert_to_repo_name(state, config):
-    url = state.get("url")
-    if not url: 
-        raise ValueError("No URL provided")
-    
-    repo_name = ChatOpenAI().invoke(
-        [
-            {
-                "role": "human", 
-                "content": """
-                You convert URLs into the github repo name. The repo name is of the form <owner>/<repo_name>
-                after the github.com/ part of the URL.
-
-                <example>
-                    <url>https://github.com/langchain-ai/langchainplus/tree/main/smith-backend</url>
-                    <output>langchain-ai/langchainplus</output>
-                </example>
-
-                <example>
-                    <url>https://github.com/apache/spark/blob/master/README.md</url>
-                    <output>apache/spark</output>
-                </example>
-             """
-            },
-            {
-                "role": "human", 
-                "content": "What is the github repo name? Answer in the form <owner>/<repo_name>. Repo URL: " + url
-            }
-        ]
-    ).content
-
-    return {"repo_name": repo_name}
-
-def load_url_github(state, config):
-    repo_name = state.get("repo_name")
-    if not repo_name: 
-        raise ValueError("No repo_name provided")
-    
-    print("repo_name", repo_name)
-    loader = GithubFileLoader(
-        repo=repo_name,  # the repo name
-        github_api_url="https://api.github.com",
-        file_filter=lambda file_path: file_path.endswith(
-            ".md"
-        ),  # load all markdowns files.
-        branch="master"
-    )
-    doc = loader.load()
-    
-
-    return {"documents": doc}
-
-
-def convert_to_facts(state, config):
-    docs = state.get("documents")
-    if not docs: 
-        raise ValueError("No documents provided")
-    
-    formatted_documents = "\n".join(
-        [
-            f"""
-            <document>
-                <content>{doc.page_content}</content>
-            </document>
-            """
-            for doc in docs
-        ]
-    )
-    
-    facts = ChatOpenAI().invoke(
-        [
-            {
-                "role": "system", 
-                "content": """
-                You are a helpful assistant. 
-             """
-            },
-            {
-                "role": "human", 
-                "content": "Extract a bulleted list of facts from the following documents:  " + formatted_documents
-            }
-        ]
-    ).content
-
-    return {"facts": facts}
-
-# summarizer_workflow.add_node("load_url", load_url_generic)
-summarizer_workflow.add_node("convert_to_repo_name", convert_to_repo_name)
-summarizer_workflow.set_entry_point("convert_to_repo_name")
-
-summarizer_workflow.add_node("load_url_github", load_url_github)
-summarizer_workflow.add_edge("convert_to_repo_name", "load_url_github")
-
-summarizer_workflow.add_node("convert_to_facts", convert_to_facts)
-summarizer_workflow.add_edge("load_url_github", "convert_to_facts")
-
-
-summarizer_graph = summarizer_workflow.compile()
-
+from langgraph.graph import StateGraph, END
 
 class DirectSummarizerState(TypedDict):
     content: str
     facts: list[str]
     tweet: str
+    attempts: int
 
-
-def convert_to_facts_v2(state, config):
+def convert_to_facts(state, config):
+    print("facts state: ", state)
     content = state.get("content")
     if not content: 
         raise ValueError("No content provided")
@@ -204,6 +37,7 @@ def convert_to_facts_v2(state, config):
     return {"facts": facts}
 
 def write_tweet(state, config):
+    print("tweets state: ", state)
     facts = state.get("facts")
     if not facts: 
         raise ValueError("No facts provided")
@@ -213,10 +47,8 @@ def write_tweet(state, config):
             {
                 "role": "system", 
                 "content": """
-                You are Harrison Chase. You run a company focused on the latest AI technologies. Your
-                followers love hearing your thoughts on AI. You are optomistic.
-                You are particularly interested in new AI methods and techniques, and highlighting interesting
-                use cases of your LLM framework, LangChain.
+                You are Harrison Chase. You tweet highlighting information related to LangChain, your LLM company.
+                You use emojis. You use exclamation points but are not overly enthusiastic.
              """
             },
             {
@@ -226,16 +58,154 @@ def write_tweet(state, config):
         ]
     ).content
 
-    return {"tweet": tweet}
+    attempts = state.get("attempts", 0) or 0
+
+    return {"tweet": tweet, "attempts": attempts + 1}
+
+# TODO: REPLACE WITH FEW SHOT SEARCH
+def get_harrision_tweets_examples():
+    return  """
+        <example>
+        It's out! LangChain v0.1.0 comes out with an improved package architecture for stability and production readiness, as well a focus on:
+        👀 Observability
+        ↔️ Integrations
+        🔗 Composability
+        🏳️ Streaming
+        🧱 Output Parsing
+        🔍 Retrieval
+        🤖 Agents
+        </example>
+
+        <example>
+        this is a really cool project - its agent that writes other agents
+        </example>
+
+        <example>
+        This was a nights and weekend project for me, but I had a lot of fun making it and think there's some good opportunities to improve it
+        See a walkthrough here: youtu.be/OM6ibrjn_Sg
+        </example>
+
+        <example>
+        🪖 LangGraph Engineer
+        This is an alpha version of an agent that can help bootstrap LangGraph applications
+        It will focus on creating the correct nodes and edges, but will not attempt to write the logic to fill in the nodes and edges - rather will leave that for you
+        Try out the deployed version: smith.langchain.com/studio/thread?…
+        The agent consists of a few steps:
+
+        1. Converse with the user to gather all requirements
+        2. Write a draft
+        3. Run programmatic checks against the generated draft (right now just checking that the response has the right format). If it fails, then go back to step 2. If it passes, then continue to step 4.
+        4. Run an LLM critique against the generated draft. If it fails, go back to step 2. If it passes, the continue to the end.
+        
+        Deployed on LangGraph Cloud, and made publicly accessible (the ability to do this is behind a feature flag, DM me if interested)
+        Code: github.com/hwchase17/lang…
+        </example>
+
+        <example>
+        Opening up access for LangGraph Cloud!
+        </example>
+
+        <example>
+        Once of the best things about LangGraph is the built in persistence layer
+        This enables all sorts of human-in-the-loop interactions
+        We've released LangGraph 0.2 which improves management of that and open-sourced our Postgres implementation
+        </example>
+    """
 
 
-summarizer_workflow_v2 = StateGraph(DirectSummarizerState, config_schema=GraphConfig)
+class SoundsLikeHarrison(BaseModel):
+    sounds_like_harrison: bool = Field(description="whether the tweet sounds like harrison chase")
 
-summarizer_workflow_v2.add_node("convert_to_facts", convert_to_facts_v2)
-summarizer_workflow_v2.set_entry_point("convert_to_facts")
+def sounds_like_harrison_checker(state, config):
+    print("sounds like state: ", state)
+    attempts = state.get("attempts", 0)
+    if attempts > 4:
+        return "done"
+    
+    tweet = state.get("tweet")
+    if not tweet: 
+        raise ValueError("No tweet provided")
+    
+    sounds_like_harrison = ChatOpenAI().with_structured_output(SoundsLikeHarrison).invoke(
+        [
+            {
+                "role": "system", 
+                "content": f"""
+                You are a helpful assistant. Here are past examples of tweets from Harrison Chase:
+                {get_harrision_tweets_examples()}
+             """
+            },
+            {
+                "role": "human", 
+                "content": "Does the following tweet sound like Harrison Chase: " + tweet
+            }
+        ]
+    ).sounds_like_harrison
 
-summarizer_workflow_v2.add_node("write_tweet", write_tweet)
-summarizer_workflow_v2.add_edge("convert_to_facts", "write_tweet")
+    if not sounds_like_harrison:
+        return "revise"
+    else:
+        return "done"
 
-summarizer_graph_v2 = summarizer_workflow_v2.compile()
+
+def harrison_tweet_reviser(state, config):
+    print("reviser state: ", state)
+    tweet = state.get("tweet")
+    if not tweet: 
+        raise ValueError("No tweet provided")
+    
+    revised_tweet = ChatOpenAI().invoke(
+        [
+            {
+                "role": "system", 
+                "content": f"""
+                You are a helpful assistant. 
+
+                Here are past examples of tweets from Harrison Chase:
+                {get_harrision_tweets_examples()}
+             """
+            },
+            {
+                "role": "human", 
+                "content": "Revise the following tweet to be more in the style of Harrison Chase's past tweets: " + tweet
+            }
+        ]
+    ).content
+
+    curr_attempts = state.get("attempts", 0)
+    print(f"curr_attempts: {curr_attempts}")
+    return {"tweet": revised_tweet, "attempts": curr_attempts + 1}
+
+
+
+
+summarizer_workflow = StateGraph(DirectSummarizerState)
+
+summarizer_workflow.add_node("convert_to_facts", convert_to_facts)
+summarizer_workflow.set_entry_point("convert_to_facts")
+
+summarizer_workflow.add_node("write_tweet", write_tweet)
+summarizer_workflow.add_edge("convert_to_facts", "write_tweet")
+
+summarizer_workflow.add_node("harrison_tweet_reviser", harrison_tweet_reviser)
+
+summarizer_workflow.add_conditional_edges(
+    "write_tweet",
+    sounds_like_harrison_checker, 
+    {
+        "revise": "harrison_tweet_reviser",
+        "done": END
+    }
+)
+
+summarizer_workflow.add_conditional_edges(
+    "harrison_tweet_reviser",
+    sounds_like_harrison_checker, 
+    {
+        "revise": "harrison_tweet_reviser",
+        "done": END
+    }
+)
+
+summarizer_graph = summarizer_workflow.compile()
 
