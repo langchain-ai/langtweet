@@ -1,0 +1,12 @@
+{
+  "python_version": "3.11",
+  "dockerfile_lines": [],
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "agent": "./document_summarizer_few_shot/agent.py:graph",
+    "doc_sum": "./document_summarizer_few_shot/agent.py:summarizer_graph_v2"
+  },
+  "env": ".env"
+}
