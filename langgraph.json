@@ -7,5 +7,7 @@
   "graphs": {
     "tweeter": "./document_summarizer_few_shot/agent.py:summarizer_graph"
   },
-  "env": ".env"
+  "env": [
+    "OPENAI_API_KEY"
+  ]
 }
