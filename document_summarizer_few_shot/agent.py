@@ -1,40 +1,81 @@
-from typing import TypedDict
+from typing import TypedDict, Literal, Optional
 
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 
+from document_summarizer_few_shot.loading import get_content
+
+class SoundsLikeHarrison(BaseModel):
+    sounds_like_harrison: bool = Field(description="whether the tweet sounds like harrison chase")
+    critique: Optional[str] = Field(description="If it does not sound like Harrison, instructions on how to sound more like Harrison")
+
+
 class DirectSummarizerState(TypedDict):
+    url: str
     content: str
     facts: list[str]
     tweet: str
     attempts: int
+    critique: SoundsLikeHarrison
+
+class GraphInput(TypedDict):
+    url: str
+
+class GraphOutput(TypedDict):
+    tweet: str
+
+
+def get_contents(state, config):
+    url = state['url']
+    content = get_content(url)
+    return {"content": content}
+
+
+class NotEnoughInfo(TypedDict):
+    call: bool
+
+class Facts(TypedDict):
+    facts: str
+
+
+convert_to_facts_system_prompt = """You are Harrison Chase. You run a company focused on the latest AI technologies. \
+Your followers love hearing your thoughts on the latest advancements in AI. You are optomistic. \
+You are particularly interested in new AI methods and techniques, and highlighting interesting \
+use cases of your LLM frameworks, LangChain LangGraph and LangSmith.
+
+I will give you an article. Extract a bulleted list of key points made or statements made in it.
+
+If there is not enough information to generate a good list of info, then call the `NotEnoughInfo` tool.
+Otherwise, ONLY generate a bulleted list of facts Using the `Facts` tool.
+
+Here is the article:
+
+{article}"""
 
 def convert_to_facts(state, config):
     print("facts state: ", state)
     content = state.get("content")
     if not content: 
         raise ValueError("No content provided")
+
+    model = ChatOpenAI(model_name="gpt-4o-mini").bind_tools([NotEnoughInfo, Facts])
     
-    facts = ChatOpenAI().invoke(
+    response = model.invoke(
         [
             {
-                "role": "system", 
-                "content": """
-                You are Harrison Chase. You run a company focused on the latest AI technologies. Your
-                followers love hearing your thoughts on the latest advancements in AI. You are optomistic.
-                You are particularly interested in new AI methods and techniques, and highlighting interesting
-                use cases of your LLM framework, LangChain.
-             """
+                "role": "user",
+                "content": convert_to_facts_system_prompt.format(article=content)
             },
-            {
-                "role": "human", 
-                "content": "Extract a bulleted list of key points made or facts stated in the following document:  " + content
-            }
         ]
-    ).content
+    )
 
-    return {"facts": facts}
+    if len(response.tool_calls) == 0:
+        return {"facts": facts}
+    else:
+        tool_call = response.tool_calls[0]
+        if tool_call['name'] == "Facts":
+            return {"facts": tool_call['args']['facts']}
 
 def write_tweet(state, config):
     print("tweets state: ", state)
@@ -113,40 +154,50 @@ def get_harrision_tweets_examples():
     """
 
 
-class SoundsLikeHarrison(BaseModel):
-    sounds_like_harrison: bool = Field(description="whether the tweet sounds like harrison chase")
 
-def sounds_like_harrison_checker(state, config):
+def harrison_critique(state, config):
     print("sounds like state: ", state)
-    attempts = state.get("attempts", 0)
-    if attempts > 4:
-        return "done"
-    
+
     tweet = state.get("tweet")
-    if not tweet: 
+    if not tweet:
         raise ValueError("No tweet provided")
-    
+
     sounds_like_harrison = ChatOpenAI().with_structured_output(SoundsLikeHarrison).invoke(
         [
             {
-                "role": "system", 
+                "role": "system",
                 "content": f"""
-                You are a helpful assistant. Here are past examples of tweets from Harrison Chase:
-                {get_harrision_tweets_examples()}
-             """
+                    You are a helpful assistant. Here are past examples of tweets from Harrison Chase:
+                    {get_harrision_tweets_examples()}
+                 """
             },
             {
-                "role": "human", 
+                "role": "human",
                 "content": "Does the following tweet sound like Harrison Chase: " + tweet
             }
         ]
-    ).sounds_like_harrison
+    )
 
+    return {"critique": sounds_like_harrison}
+def sounds_like_harrison_checker(state, config):
+    attempts = state.get("attempts", 0)
+
+    if attempts > 4:
+        return "done"
+    sounds_like_harrison = state['critique'].sounds_like_harrison
     if not sounds_like_harrison:
         return "revise"
     else:
         return "done"
 
+
+reviser_human_prompt = """Revise the following tweet to be more in the style of Harrison Chase's past tweets.
+
+Here is some direct feedback: {feedback}
+
+Here's the tweet:
+
+{tweet}"""
 
 def harrison_tweet_reviser(state, config):
     print("reviser state: ", state)
@@ -167,7 +218,7 @@ def harrison_tweet_reviser(state, config):
             },
             {
                 "role": "human", 
-                "content": "Revise the following tweet to be more in the style of Harrison Chase's past tweets: " + tweet
+                "content": reviser_human_prompt.format(tweet=tweet, feedback=state['critique'].critique)
             }
         ]
     ).content
@@ -177,20 +228,29 @@ def harrison_tweet_reviser(state, config):
     return {"tweet": revised_tweet, "attempts": curr_attempts + 1}
 
 
+def _check_if_enough_info(state: DirectSummarizerState) -> Literal["write_tweet", END]:
+    if "facts" in state:
+        return "write_tweet"
+    else:
+        return END
 
 
-summarizer_workflow = StateGraph(DirectSummarizerState)
+summarizer_workflow = StateGraph(DirectSummarizerState, input=GraphInput, output=GraphOutput)
+summarizer_workflow.add_node(get_contents)
+summarizer_workflow.add_node(convert_to_facts)
+summarizer_workflow.add_node(harrison_critique)
+summarizer_workflow.add_node(write_tweet)
+summarizer_workflow.add_node(harrison_tweet_reviser)
 
-summarizer_workflow.add_node("convert_to_facts", convert_to_facts)
-summarizer_workflow.set_entry_point("convert_to_facts")
+summarizer_workflow.set_entry_point("get_contents")
+summarizer_workflow.add_edge("get_contents", "convert_to_facts")
+summarizer_workflow.add_edge("write_tweet", "harrison_critique")
+summarizer_workflow.add_edge("harrison_tweet_reviser", "harrison_critique")
+summarizer_workflow.add_conditional_edges("convert_to_facts", _check_if_enough_info)
 
-summarizer_workflow.add_node("write_tweet", write_tweet)
-summarizer_workflow.add_edge("convert_to_facts", "write_tweet")
-
-summarizer_workflow.add_node("harrison_tweet_reviser", harrison_tweet_reviser)
 
 summarizer_workflow.add_conditional_edges(
-    "write_tweet",
+    "harrison_critique",
     sounds_like_harrison_checker, 
     {
         "revise": "harrison_tweet_reviser",
@@ -198,14 +258,6 @@ summarizer_workflow.add_conditional_edges(
     }
 )
 
-summarizer_workflow.add_conditional_edges(
-    "harrison_tweet_reviser",
-    sounds_like_harrison_checker, 
-    {
-        "revise": "harrison_tweet_reviser",
-        "done": END
-    }
-)
 
 summarizer_graph = summarizer_workflow.compile()
 

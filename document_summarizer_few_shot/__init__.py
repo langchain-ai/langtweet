@@ -1,5 +1,5 @@
-from .agent import graph
+from .agent import summarizer_graph
 
-__all__ = ["graph"]
+__all__ = ["summarizer_graph"]
 
 __version__ = "0.1.0"
