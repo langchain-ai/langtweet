@@ -29,17 +29,21 @@ def get_github_readme(url):
     owner, repo = match.groups()
     readme_files = ['README.md', 'README.txt', 'README', 'Readme.md', 'readme.md']
 
-    for filename in readme_files:
-        # Construct the raw content URL
-        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/main/{filename}"
+    for branch in ['main', 'master']:
+        for filename in readme_files:
+            # Construct the raw content URL
+            raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{filename}"
 
-        try:
-            response = requests.get(raw_url)
-            response.raise_for_status()  # Raises an HTTPError for bad responses
-            return response.text
-        except requests.exceptions.HTTPError:
-            continue  # Try the next filename if this one doesn't exist
+            try:
+                response = requests.get(raw_url)
+                response.raise_for_status()  # Raises an HTTPError for bad responses
+                return response.text
+            except requests.exceptions.HTTPError as e:
+                print("ERROR")
+                print(e)
+                continue
 
+    print("Could not easily find a README file")
     return ""
 
 
@@ -51,11 +55,13 @@ def get_youtube_description(url):
 
 
 def get_content(url):
+    print("get_content url: ", url)
     if is_youtube_url(url):
         return get_youtube_description(url)
     elif is_github_url(url):
         return get_github_readme(url)
     else:
+        print("generic url")
         loader = WebBaseLoader(url)
         docs = loader.load()
         return docs[0].page_content
