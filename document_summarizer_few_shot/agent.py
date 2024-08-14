@@ -219,6 +219,10 @@ def harrison_critique(state, config):
                 "content": f"""
                     You are a helpful assistant. Here are past examples of tweets from Harrison Chase:
                     {get_harrision_tweets_examples()}
+
+                    Harrison tweets highlighting information related to LangChain, his LLM company, and AI in general.
+                    He uses emojis. He uses exclamation points but is not overly enthusiastic. He never uses hashtags.
+                    He sometimes make spelling mistakes. He is not overly formal. He is not "salesy". He is nice. He is concise.
                  """
             },
             {
