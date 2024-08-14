@@ -68,8 +68,6 @@ def get_medium_content(url):
     docs = loader.load()
     return docs[0].page_content
 
-    print(f"{len(docs)} documents loaded")
-
 
 def get_content(url):
     print("get_content url: ", url)

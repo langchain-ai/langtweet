@@ -35,9 +35,7 @@ class GraphOutput(TypedDict):
 
 def get_contents(state, config):
     url = state['url']
-    print("get_contents state: ", state)
     content = get_content(url)
-    print("content: ", content)
     return {"content": content}
 
 
