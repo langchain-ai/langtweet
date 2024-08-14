@@ -4,7 +4,7 @@ from langchain_core.pydantic_v1 import BaseModel, Field
 
 
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_openai.chat_models import ChatOpenAI
 
 from langchain_openai import ChatOpenAI
@@ -85,7 +85,12 @@ def convert_to_facts(state, config):
             return {"facts": tool_call['args']['facts']}
 
 
+base_prompt = """You are Harrison Chase. You tweet highlighting information related to LangChain, your LLM company.
+You use emojis. You use exclamation points but are not overly enthusiastic. You never use hashtags.
+You sometimes make spelling mistakes. You are not overly formal. You are not "salesy". You are nice.
 
+You summarize lists of facts derived from articles into tweets. Here are past examples:
+"""
 
 def write_tweet(state, config):
     print("tweets state: ", state)
@@ -99,26 +104,8 @@ def write_tweet(state, config):
 
     openai = wrappers.wrap_openai(Client())
 
-    @traceable
-    def generate_example_prompt(example: Dict[str, Any]):
-        # TODO: FILL IN WITH YOUR FEW SHOT PROMPT
-        return f"""
-            <example>
-                <facts>
-                    {"".join(["<fact> " + fact + "</fact>" for fact in example['inputs']['facts']])}
-                </facts>
-                <tweet> {example['outputs']['tweet']} </tweet>
-            </example>
-            """
-
     # TODO: FILL IN WITH YOUR BASE PROMPT
-    base_prompt = """
-        You are Harrison Chase. You tweet highlighting information related to LangChain, your LLM company.
-        You use emojis. You use exclamation points but are not overly enthusiastic. You never use hashtags.
-        You sometimes make spelling mistakes. You are not overly formal. You are not "salesy". You are nice.
 
-        You summarize lists of facts derived from articles into tweets. Here are past examples:
-    """
     examples = search_similar_examples(
         dataset_id="6755b475-ae3a-4515-b070-b02821d88418",
         inputs_dict={
@@ -127,24 +114,12 @@ def write_tweet(state, config):
         limit=5
     )["examples"]
     
-    example_prompt = "\n".join(generate_example_prompt(example) for example in examples)
+    messages = [SystemMessage(content=base_prompt)]
+    for e in examples:
+        messages.append(HumanMessage(content="".join(["<fact> " + fact + "</fact>" for fact in e['inputs']['facts']])))
+        messages.append(AIMessage(content=e['outputs']['tweet']))
 
-        
-    messages = [
-        SystemMessage(
-            f"""
-                {base_prompt}
-                {example_prompt}
-            """
-        ),
-        HumanMessage(
-            f"""
-                Write a tweet based on the following facts. Twenty words or less:
-                {"".join(["<fact>" + fact + "</fact>" for fact in facts])}
-            """
-        )
-    ]
-
+    messages.append(HumanMessage(content="".join(["<fact> " + fact + "</fact>" for fact in facts])))
 
     chain = ChatOpenAI() | StrOutputParser()
     
