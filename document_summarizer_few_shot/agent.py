@@ -149,3 +149,20 @@ summarizer_workflow.add_edge("write_tweet", END)
 
 summarizer_graph = summarizer_workflow.compile()
 
+
+tweet_workflow = StateGraph(DirectSummarizerState, input=GraphInput, output=GraphOutput)
+tweet_workflow.add_node(get_contents)
+tweet_workflow.add_node(convert_to_facts)
+tweet_workflow.add_node(write_tweet)
+
+tweet_workflow.set_entry_point("get_contents")
+tweet_workflow.add_edge("get_contents", "convert_to_facts")
+tweet_workflow.add_conditional_edges("convert_to_facts", _check_if_enough_info)
+tweet_workflow.add_edge("write_tweet", END)
+
+
+tweet_graph = tweet_workflow.compile()
+
+
+
+
