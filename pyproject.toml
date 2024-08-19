@@ -18,8 +18,8 @@ langchain_openai = "^0.1.0"
 tavily-python = "^0.3.0"
 pytube = "*"
 beautifulsoup4 = "*"
+streamlit = "*"
 langchain_community = "^0.2.0"
-bs4 = "^0.0.2"
 
 
 [build-system]
