@@ -4,11 +4,13 @@ This is an example repository demonstrating the power of dynamic few-shot prompt
 We use LangSmith to serve a few-shot dataset that we use to prompt an LLM to generate tweets in a style we like.
 We use LangGraph to orchestrate the (relatively simple) graph.
 
+![](./static/agent_ui.png)
+
 **Key Links:**
-- [YouTube Walkthrough]()
-- [Try out the graph here]()
-- [LangSmith]()
-- [LangGraph]()
+- [YouTube Walkthrough](https://youtu.be/xFpTMU24eUg)
+- [Try out the graph here](https://smith.langchain.com/studio/thread?baseUrl=https://langtweet-0e7095f4dab057f6bbddc823a9eae0aa.default.us.langgraph.app)
+- [LangSmith](https://smith.langchain.com/)
+- [LangGraph](https://github.com/langchain-ai/langgraph)
 
 ## The graph
 
@@ -28,14 +30,14 @@ The prompt instructions for tweeting are pretty basic.
 It provides a bit of context then tells the LLM to pay attention to the examples.
 Therefor, the examples are doing a lot of lifting here.
 
-We use LangSmith to manage and serve the dataset that we use as examples.
+We use [LangSmith](https://smith.langchain.com/) to manage and serve the dataset that we use as examples.
 
 ## The deployment
 
 We deploy the graph to LangGraph Cloud.
 This gives us a nice API to interact with, as well as fun studio UI to use to try out the graph.
 
-We've made this studio publicly accessible, you can use it [here](TODO).
+We've made this studio publicly accessible, you can use it [here](https://smith.langchain.com/studio/thread?baseUrl=https://langtweet-0e7095f4dab057f6bbddc823a9eae0aa.default.us.langgraph.app).
 
 ## The feedback loop
 

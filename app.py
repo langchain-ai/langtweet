@@ -9,7 +9,7 @@ ls_client = Client()
 
 
 async def _predict(url):
-    client = get_client(url="http://localhost:62715")
+    client = get_client(url="http://localhost:64176")
     thread = await client.threads.create()
     value = None
     async for chunk in client.runs.stream(
