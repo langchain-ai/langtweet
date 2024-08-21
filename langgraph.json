@@ -5,7 +5,7 @@
     "."
   ],
   "graphs": {
-    "tweeter": "./document_summarizer_few_shot/agent.py:make_graph"
+    "tweeter": "./langtweet/agent.py:tweet_graph"
   },
   "env": [
     "OPENAI_API_KEY"

@@ -1,17 +1,18 @@
 [tool.poetry]
-name = "document_summarizer_few_shot"
+name = "langtweet"
 version = "0.1.0"
-description = "Example LangGraph project for deployment to LangGraph Cloud"
+description = "Example of using dynamic few-shot prompting to tweet in a specific style."
 authors = [
     "langchain-ai"
 ]
 packages = [
-    { include = "document_summarizer_few_shot" },
+    { include = "langtweet" },
 ]
 
 [tool.poetry.dependencies]
 python = ">=3.9.0,<3.13"
 langgraph = "^0.2.0"
+langsmith= "^0.1.100"
 langchain_anthropic = "^0.1.0"
 langchain_core = "^0.2.0"
 langchain_openai = "^0.1.0"

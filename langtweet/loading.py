@@ -1,44 +1,48 @@
 import re
 from pytube import YouTube
 from langchain_community.document_loaders import WebBaseLoader
-import re
 import requests
-import base64
 
 import bs4
+
 
 def is_youtube_url(url):
     # Regular expression pattern for YouTube URLs
     youtube_regex = (
-        r'(https?://)?(www\.)?'
-        '(youtube|youtu|youtube-nocookie)\.(com|be)/'
-        '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})'
+        r"(https?://)?(www\.)?"
+        "(youtube|youtu|youtube-nocookie)\.(com|be)/"
+        "(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})"
     )
 
     youtube_regex_match = re.match(youtube_regex, url)
     return bool(youtube_regex_match)
 
+
 def is_medium_url(url):
     # Regular expression pattern for Medium URLs
-    medium_regex = r'https?://medium\.com/'
+    medium_regex = r"https?://medium\.com/"
     medium_regex_match = re.match(medium_regex, url)
     return bool(medium_regex_match)
 
+
 def is_github_url(url):
-    match = re.match(r'https?://github.com/([^/]+)/([^/]+)', url)
+    match = re.match(r"https?://github.com/([^/]+)/([^/]+)", url)
     return bool(match)
+
 
 def get_github_readme(url):
     # Extract owner and repo from the GitHub URL
-    match = re.match(r'https?://github.com/([^/]+)/([^/]+)', url)
+    match = re.match(r"https?://github.com/([^/]+)/([^/]+)", url)
 
     owner, repo = match.groups()
-    readme_files = ['README.md', 'README.txt', 'README', 'Readme.md', 'readme.md']
+    readme_files = ["README.md", "README.txt", "README", "Readme.md", "readme.md"]
 
-    for branch in ['main', 'master']:
+    for branch in ["main", "master"]:
         for filename in readme_files:
             # Construct the raw content URL
-            raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{filename}"
+            raw_url = (
+                f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{filename}"
+            )
 
             try:
                 response = requests.get(raw_url)
@@ -59,10 +63,13 @@ def get_youtube_description(url):
 
     return f"Title: {yt.title}\n\nDescription: {yt.description}"
 
+
 def get_medium_content(url):
     loader = WebBaseLoader(
         web_paths=[url],
-        bs_kwargs=dict(parse_only=bs4.SoupStrainer("article")), # only elements in article tag
+        bs_kwargs=dict(
+            parse_only=bs4.SoupStrainer("article")
+        ),  # only elements in article tag
     )
 
     docs = loader.load()
