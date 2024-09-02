@@ -25,6 +25,13 @@ def is_medium_url(url):
     return bool(medium_regex_match)
 
 
+def is_substack_url(url):
+    # Regular expression pattern for Substack URLs
+    substack_regex = r"https?://[a-z]*.substack.com/"
+    substack_regex_match = re.match(substack_regex, url)
+    return bool(substack_regex_match)
+
+
 def is_github_url(url):
     match = re.match(r"https?://github.com/([^/]+)/([^/]+)", url)
     return bool(match)
@@ -64,7 +71,7 @@ def get_youtube_description(url):
     return f"Title: {yt.title}\n\nDescription: {yt.description}"
 
 
-def get_medium_content(url):
+def get_medium_or_substack_content(url):
     loader = WebBaseLoader(
         web_paths=[url],
         bs_kwargs=dict(
@@ -81,9 +88,11 @@ def get_content(url):
     if is_youtube_url(url):
         return get_youtube_description(url)
     elif is_medium_url(url):
-        return get_medium_content(url)
+        return get_medium_or_substack_content(url)
     elif is_github_url(url):
         return get_github_readme(url)
+    elif is_substack_url(url):
+        return get_medium_or_substack_content(url)
     else:
         print("generic url")
         loader = WebBaseLoader(url)
