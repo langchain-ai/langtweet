@@ -36,6 +36,10 @@ def is_github_url(url):
     match = re.match(r"https?://github.com/([^/]+)/([^/]+)", url)
     return bool(match)
 
+def is_linkedin_url(url):
+    match = re.match(r"https?://www.linkedin.com/", url)
+    return bool(match)
+
 
 def get_github_readme(url):
     # Extract owner and repo from the GitHub URL
@@ -71,7 +75,14 @@ def get_youtube_description(url):
     return f"Title: {yt.title}\n\nDescription: {yt.description}"
 
 
-def get_medium_or_substack_content(url):
+def get_article_content(url):
+    # Get article content. Multiple blogging/newsletter websites 
+    # have a common structure where they store their content under
+    # <article></article> tag.
+    # This method extracts the content of those websites.
+    # Eg. Medium, Substack, Linkedin newsletters
+    # Can be extended for other domains as well, that store their 
+    # content under <article> tag.
     loader = WebBaseLoader(
         web_paths=[url],
         bs_kwargs=dict(
@@ -87,12 +98,10 @@ def get_content(url):
     print("get_content url: ", url)
     if is_youtube_url(url):
         return get_youtube_description(url)
-    elif is_medium_url(url):
-        return get_medium_or_substack_content(url)
     elif is_github_url(url):
         return get_github_readme(url)
-    elif is_substack_url(url):
-        return get_medium_or_substack_content(url)
+    elif is_medium_url(url) or is_substack_url(url) or is_linkedin_url(url):
+        return get_article_content(url)
     else:
         print("generic url")
         loader = WebBaseLoader(url)
